@@ -13,9 +13,9 @@ class SOM():
         self.n_rows = n_rows
         self.n_cols = n_cols
 
-        self.weights = np.random.rand(self.n_rows, self.n_cols, self.dim_in)  # FIXME (we will solve this together on the exercises):
+        self.weights = np.random.rand(self.n_rows, self.n_cols, self.dim_in)
 
-        if inputs is not None:  # FIXME (we will solve this together on the exercises):
+        if inputs is not None:
             # "Fill" the input space with neurons - scale and shift neurons to inputs' distribution.
             # Note: SOM will train even without it, but it helps.
             ma = np.max(inputs, axis=1)

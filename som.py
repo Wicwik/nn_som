@@ -1,9 +1,12 @@
 # Neural Networks (2-AIN-132/15), FMFI UK BA
 # (c) Tomas Kuzma, Juraj Holas, Peter Gergel, Endre Hamerlik, Štefan Pócoš, Iveta Bečková 2017-2022
 
+import itertools
+
 import numpy as np
 
 from util import *
+
 
 
 class SOM():
@@ -12,6 +15,10 @@ class SOM():
         self.dim_in = dim_in
         self.n_rows = n_rows
         self.n_cols = n_cols
+        self.history = None
+        self.nonzero_idx = None
+        self.classes = None
+        self.class_counts = None
 
         self.weights = np.random.rand(self.n_rows, self.n_cols, self.dim_in)
 
@@ -24,7 +31,6 @@ class SOM():
             mi = np.min(inputs, axis=1)
 
             self.weights = mi + self.weights * (ma - mi)
-
 
     def winner(self, x):
         '''
@@ -43,6 +49,9 @@ class SOM():
               grid_metric=(lambda u,v:0),                              # Grid distance metric
               live_plot=False, live_plot_interval=10                   # Draw plots dring training process
              ):
+        '''
+        return self.history:(size=(eps,4)) contains [alpha_t, lambda_t, Q_err, A]
+        '''
 
         (_, count) = inputs.shape
         plot_in3d = self.dim_in > 2
@@ -52,9 +61,13 @@ class SOM():
             (plot_grid_3d if plot_in3d else plot_grid_2d)(inputs, self.weights, block=False)
             redraw()
 
+        history = []
         for ep in range(eps):
             alpha_t  = alpha_s*(alpha_f/alpha_s)**(ep/(eps-1))
             lambda_t = lambda_s*(lambda_f/lambda_s)**(ep/(eps-1))
+
+            qe_d = []
+            w_prev = self.weights.copy()
 
             for idx in np.random.permutation(count):
                 x = inputs[:, idx]
@@ -71,8 +84,15 @@ class SOM():
                     h_t = np.exp(-np.power(d,2)/np.power(lambda_t,2)).reshape(self.n_rows, self.n_cols, 1)
                     self.weights += alpha_t*(x-self.weights)*h_t
 
-            print('Ep {:3d}/{:3d}:  alpha_t = {:.3f}, lambda_t = {:.3f}'
-                  .format(ep+1, eps, alpha_t, lambda_t))
+                qe_d.append(np.linalg.norm(x - self.weights[win_r, win_c]))
+
+            A = np.mean(np.linalg.norm(self.weights - w_prev, axis=2))
+
+            Q_err = np.mean(qe_d)
+            print('Ep {:3d}/{:3d}:  alpha_t = {:.3f}, lambda_t = {:.3f}, Q_err = {:.3f}, A = {:.3f}'
+                  .format(ep+1, eps, alpha_t, lambda_t, Q_err, A))
+
+            history.append([alpha_t/alpha_s, lambda_t/lambda_s, Q_err, A])
 
             if live_plot and ((ep+1) % live_plot_interval == 0):
                 (plot_grid_3d if plot_in3d else plot_grid_2d)(inputs, self.weights, block=False)
@@ -82,3 +102,88 @@ class SOM():
             interactive_off()
         else:
             (plot_grid_3d if plot_in3d else plot_grid_2d)(inputs, self.weights, block=True)
+
+        self.history = np.array(history)
+
+    def evaluate(self, inputs, labels):
+        '''
+        Evaluate classes for each neuron
+        returns (nonzero_idx, classes, counts)
+        '''
+
+        counts = np.zeros((self.n_rows, self.n_cols, int(np.max(labels))))
+
+        (_, count) = inputs.shape
+        for idx in range(count):
+            x = inputs[:, idx]
+
+            win_r, win_c = self.winner(x)
+            counts[win_r, win_c, int(labels[idx])-1] += 1
+
+        self.nonzero_idx = np.nonzero(np.sum(counts, axis=2))
+        self.classes = []
+        self.class_counts = []
+
+        for c in counts[self.nonzero_idx]:
+            idx = np.nonzero(c)[0]
+            self.classes.append(list(idx))
+            self.class_counts.append(list(c[idx].astype(int)))
+
+        # print(list(zip(*self.nonzero_idx))[1], self.classes[1])
+
+    def predict(self, inputs):
+        predicted = []
+
+        (_, count) = inputs.shape
+        for idx in range(count):
+           x = inputs[:, idx]
+
+           win_r, win_c = self.winner(x)
+
+           pred_idx = np.where(self.nonzero_idx == (win_r, win_c))
+           predicted.append(self.classes[pred_idx])
+
+        return predicted
+
+    # TODO use numpy indexing and make it neeaterk
+    def get_u_matrix(self):
+        '''
+        Create U-Matrix in both directions
+        We are also including neurons and distances between them
+        '''
+        self.u_matrix = np.zeros(shape=(self.n_rows * 2 - 1, self.n_cols * 2 - 1, 1), dtype=float)
+
+        for u_idx in itertools.product(range(self.n_rows * 2 - 1), range(self.n_cols * 2 - 1)):
+            neigh = (0, 0)
+
+            if not (u_idx[0] % 2) and (u_idx[1] % 2):
+                neigh = (0, 1)  # horizontal distance
+            
+            if (u_idx[0] % 2) and not (u_idx[1] % 2):
+                neigh = (1, 0)  # vertical distance
+
+            self.u_matrix[u_idx] = np.linalg.norm(self.weights[u_idx[0]//2, u_idx[1]//2] - self.weights[u_idx[0]//2 + neigh[0], u_idx[1]//2 + neigh[1]], axis=0)
+
+        for u_idx in itertools.product(range(self.n_rows * 2 - 1), range(self.n_cols * 2 - 1)):
+            if not (u_idx[0] % 2) and not (u_idx[1] % 2):
+                idx_list = []
+
+                if u_idx[0] > 0:
+                    idx_list.append((u_idx[0] - 1, u_idx[1]))
+                
+                if u_idx[0] < self.n_rows * 2 - 2:
+                    idx_list.append((u_idx[0] + 1, u_idx[1])) 
+                
+                if u_idx[1] > 0:
+                    idx_list.append((u_idx[0], u_idx[1] - 1)) 
+                
+                if u_idx[1] < self.n_cols * 2 - 2:
+                    idx_list.append((u_idx[0], u_idx[1] + 1)) 
+
+                self.u_matrix[u_idx] = np.mean([self.u_matrix[idx] for idx in idx_list])
+
+            elif (u_idx[0] % 2) and (u_idx[1] % 2):
+                idx_list = [(u_idx[0] - 1, u_idx[1]),(u_idx[0] + 1, u_idx[1]),(u_idx[0], u_idx[1] - 1),(u_idx[0], u_idx[1] + 1)]
+                self.u_matrix[u_idx] = np.mean([self.u_matrix[idx] for idx in idx_list])
+
+        return self.u_matrix

@@ -12,4 +12,5 @@ By default a filename seeds_dataset.txt is specified in main.py file. You can ch
 - `wget https://archive.ics.uci.edu/ml/machine-learning-databases/00236/seeds_dataset.txt`
 - `python -m venv venv_nn_som`
 - `. venv_nn_som/bin/activate`
+- `pip install -r requirements.txt`
 - `python main.py`

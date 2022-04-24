@@ -76,7 +76,7 @@ top_left = np.array((0, 0))
 bottom_right = np.array((rows-1, cols-1))
 lambda_s = grid_metric(top_left, bottom_right) * 0.5
 
-plot_dots(inputs, labels, None, None, None, None, filename='all_data.png', title='All data')
+plot_dots(train_inputs, train_labels, None, test_inputs, test_labels, None, filename='all_data.png', title='All data')
 
 # tran SOM on training data
 model = SOM(dim_in, rows, cols, train_inputs)

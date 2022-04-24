@@ -1,3 +1,4 @@
+# This file was adopted from NN seminars and changed (to fit project purposes) by Robert Belanec
 # Neural Networks (2-AIN-132/15), FMFI UK BA
 # (c) Tomas Kuzma, Juraj Holas, Peter Gergel, Endre Hamerlik, Štefan Pócoš, Iveta Bečková 2017-2022
 
@@ -108,6 +109,10 @@ class SOM():
     def evaluate(self, inputs, labels):
         '''
         Evaluate classes for each neuron
+        Create array of neurons indexes that belong to some data
+        Create list of classes for each neuron that belongs to som data (as its possible for neuron to have 2 classes the data structure is list of lists)
+        Create list of counts for each neuron for each class
+        This array and lists can help us predict test data and plot meshgrid
         returns (nonzero_idx, classes, counts)
         '''
 
@@ -136,23 +141,45 @@ class SOM():
 
         (_, count) = inputs.shape
         for idx in range(count):
-           x = inputs[:, idx]
 
-           win_r, win_c = self.winner(x)
+            x = inputs[:, idx]
 
-           pred_idx = np.where(self.nonzero_idx == (win_r, win_c))
-           predicted.append(self.classes[pred_idx])
+            # find winner neuron
+            win_r, win_c = self.winner(x)
+            # print((win_c, win_r))
 
-        return predicted
+            # get an array of neurons that belong to some class
+            idx_arr = np.array(list(zip(*self.nonzero_idx)))
+            # print(idx_arr)
 
-    # TODO use numpy indexing and make it neeaterk
+            # find index of winner neuron in array of neurons that belong to some class
+            pred_idx = np.where((idx_arr[:,0] == win_r) & (idx_arr[:,1] == win_c))
+
+            # if the index was not found append None else append the class with the biggest count for that neuron
+            if pred_idx[0].shape[0] == 0:
+                predicted.append(-1)
+            else:
+                max_idx = np.argmax(self.class_counts[pred_idx[0][0]])
+                predicted.append(self.classes[pred_idx[0][0]][max_idx])
+
+        return np.array(predicted)
+
+    def accuracy(self, predicted, targets):
+        labels = targets-1
+
+        CE = np.sum((predicted != labels))/labels.shape[0]
+        return CE
+
     def get_u_matrix(self):
         '''
         Create U-Matrix in both directions
         We are also including neurons and distances between them
         '''
+
+        # the U-Matrix will have size of (rows * 2 - 1, cols * 2 - 1) 
         self.u_matrix = np.zeros(shape=(self.n_rows * 2 - 1, self.n_cols * 2 - 1, 1), dtype=float)
 
+        # first we calculate the L2 norm of neighboring neurons by iterating over all posible indexes
         for u_idx in itertools.product(range(self.n_rows * 2 - 1), range(self.n_cols * 2 - 1)):
             neigh = (0, 0)
 
@@ -162,8 +189,10 @@ class SOM():
             if (u_idx[0] % 2) and not (u_idx[1] % 2):
                 neigh = (1, 0)  # vertical distance
 
+            # calcuate the distance between neigboring neurons, if both indexes are odd or even, we are calculating position of the neuron in the U-Matrix
             self.u_matrix[u_idx] = np.linalg.norm(self.weights[u_idx[0]//2, u_idx[1]//2] - self.weights[u_idx[0]//2 + neigh[0], u_idx[1]//2 + neigh[1]], axis=0)
 
+        # we can calculate the positions of the neurons as the mean of neigbors
         for u_idx in itertools.product(range(self.n_rows * 2 - 1), range(self.n_cols * 2 - 1)):
             if not (u_idx[0] % 2) and not (u_idx[1] % 2):
                 idx_list = []

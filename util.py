@@ -1,3 +1,4 @@
+# This file was adopted from NN seminars and changed (to fit project purposes) by Robert Belanec
 # Neural Networks (2-AIN-132/15), FMFI UK BA
 # (c) Tomas Kuzma, Juraj Holas, Peter Gergel, Endre Hamerlik, Štefan Pócoš, Iveta Bečková 2017-2022
 
